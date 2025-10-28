@@ -157,6 +157,12 @@
     display: none;
   }
 }
+
+/* ADD THIS - Hide Action column during PDF export */
+.pdf-export .v-section:nth-child(4) .v-table th:last-child,
+.pdf-export .v-section:nth-child(4) .v-table td:last-child {
+  display: none !important;
+}
     </style>
   </head>
   <body>
@@ -995,27 +1001,73 @@ function downloadPdf(){
       return;
     }
     
+    // Get voucher number dynamically
+    const voucherNumberElement = document.getElementById('pv_voucherNo');
+    let voucherNumber = 'voucher';
+    
+    if (voucherNumberElement && voucherNumberElement.textContent) {
+      // Clean the voucher number - remove any unwanted characters and trim spaces
+      voucherNumber = voucherNumberElement.textContent
+        .trim()
+        .replace(/[^a-zA-Z0-9-_]/g, '_') // Replace special chars with underscore
+        .replace(/_+/g, '_') // Replace multiple underscores with single
+        .replace(/^_|_$/g, ''); // Remove leading/trailing underscores
+      
+      // If after cleaning it's empty, use default
+      if (!voucherNumber) {
+        voucherNumber = 'voucher';
+      }
+    }
+    
+    // Add PDF mode class to hide Action columns
+    element.classList.add('pdf-export');
+    
     const opt = {
       margin: 0.5,
-      filename: (pv_voucherNo.textContent || 'voucher') + '.pdf',
+      filename: `${voucherNumber}.pdf`, // Dynamic filename
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { 
+        scale: 2,
+        useCORS: true,
+        logging: false
+      },
       jsPDF: { unit: 'in', format: 'a4', orientation: 'portrait' }
     };
+
     
     // Show loading indicator
     const originalText = el('btnPdf').textContent;
     el('btnPdf').textContent = 'Generating PDF...';
     el('btnPdf').disabled = true;
     
-    html2pdf().set(opt).from(element).save().finally(() => {
-      // Restore button state
-      el('btnPdf').textContent = originalText;
-      el('btnPdf').disabled = false;
-    });
+    // Small delay to ensure CSS is applied before capture
+    setTimeout(() => {
+      html2pdf().set(opt).from(element).save().then(() => {
+        // Remove PDF mode class
+        element.classList.remove('pdf-export');
+        
+        // Restore button state
+        el('btnPdf').textContent = originalText;
+        el('btnPdf').disabled = false;
+      }).catch((error) => {
+        console.error('PDF generation error:', error);
+        // Remove PDF mode class even if error occurs
+        element.classList.remove('pdf-export');
+        el('btnPdf').textContent = 'Download PDF';
+        el('btnPdf').disabled = false;
+        alert('Failed to generate PDF. Please try again.');
+      });
+    }, 100);
     
   } catch (error) {
     console.error('PDF generation failed:', error);
+    
+    // Remove PDF mode class even if error occurs
+    const element = document.getElementById('voucherPreview');
+    if (element) {
+      element.classList.remove('pdf-export');
+    }
+    
     alert('Failed to generate PDF. Please try again.');
     el('btnPdf').textContent = 'Download PDF';
     el('btnPdf').disabled = false;
